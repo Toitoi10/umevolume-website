@@ -1,20 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>My Webpage</title>
   <style>
-    /*set the height and width of the iframe to be 100%*/
+    /*set the height of the iframe to be 20 pixels less than the full height*/
     iframe {
-      height: 100%;
-      width: 100%;
-    }
-    /*hide the top 20 pixels of the iframe*/
-    iframe {
-      position: relative;
-      top: -20px;
+      height: calc(100% - 20px);
     }
   </style>
 </head>
 <body>
+  <h1>Welcome to My Webpage</h1>
+  <p>Here is an embedded webpage:</p>
   <iframe src="https://umevolumech.wixsite.com/ume-volume"></iframe>
 </body>
 </html>
