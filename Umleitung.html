@@ -3,19 +3,19 @@
 <head>
   <title>My Webpage</title>
   <style>
-    /*set the height of the iframe to be 20 pixels less than the full height*/
+    /*set the height and width of the iframe to be 100%*/
     iframe {
-      height: calc(100% - 20px);
+      height: 100%;
+      width: 100%;
+    }
+    /*hide the top 20 pixels of the iframe*/
+    iframe {
+      position: relative;
+      top: -20px;
     }
   </style>
 </head>
 <body>
-  <h1>Welcome to My Webpage</h1>
-  <p>Here is an embedded webpage:</p>
-  <iframe src=""https://umevolumech.wixsite.com/ume-volume"></iframe>
+  <iframe src="https://example.com"></iframe>
 </body>
 </html>
-
-
-
-<iframe src="https://umevolumech.wixsite.com/ume-volume" style="height: calc(100% - 20px);"></iframe>
