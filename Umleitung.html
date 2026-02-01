@@ -1,10 +1,365 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dino Hüpfspiel</title>
   <style>
+    :root {
+      color-scheme: light;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f6f7fb;
+      color: #111827;
+    }
+
+    .game-shell {
+      width: min(900px, 95vw);
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .game-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .game-title {
+      font-size: clamp(1.4rem, 2vw, 2rem);
+      font-weight: 700;
+    }
+
+    .scoreboard {
+      display: flex;
+      gap: 16px;
+      font-size: 0.95rem;
+    }
+
+    .scoreboard span {
+      font-weight: 600;
+    }
+
+    canvas {
+      width: 100%;
+      height: 280px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #ffffff 0%, #f0f4ff 100%);
+      border: 2px solid #e2e8f0;
+    }
+
+    .game-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .game-controls button {
+      border: none;
+      background: #111827;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .game-controls button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 16px rgba(15, 23, 42, 0.2);
+    }
+
+    .game-controls button:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    .instructions {
+      font-size: 0.95rem;
+      color: #475569;
+      margin: 0;
+    }
+
+    .game-status {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .touch-hint {
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      canvas {
+        height: 240px;
+      }
+
+      .touch-hint {
+        display: inline;
+      }
+    }
   </style>
 </head>
 <body>
-  <frame src="https://umevolumech.wixsite.com/ume-volume" ></frame>
+  <main class="game-shell">
+    <header class="game-header">
+      <div>
+        <div class="game-title">Dino Hüpfspiel</div>
+        <p class="instructions">
+          Drücke <strong>Leertaste</strong> oder tippe, um zu springen. Sammle Punkte durch Ausweichen.
+        </p>
+      </div>
+      <div class="scoreboard">
+        <div>Score: <span id="score">0</span></div>
+        <div>Best: <span id="best">0</span></div>
+      </div>
+    </header>
+
+    <canvas id="game" width="860" height="280" aria-label="Dino Hüpfspiel"></canvas>
+
+    <section class="game-controls">
+      <div class="game-status" id="status">Bereit für den Start</div>
+      <button id="restart" type="button">Neu starten</button>
+    </section>
+  </main>
+
+  <script>
+    const canvas = document.querySelector("#game");
+    const ctx = canvas.getContext("2d");
+
+    const scoreEl = document.querySelector("#score");
+    const bestEl = document.querySelector("#best");
+    const statusEl = document.querySelector("#status");
+    const restartButton = document.querySelector("#restart");
+
+    const groundY = 220;
+    const gravity = 0.9;
+    const jumpVelocity = -15;
+
+    let dino;
+    let obstacles;
+    let clouds;
+    let gameSpeed;
+    let score;
+    let bestScore = Number(localStorage.getItem("dinoBestScore")) || 0;
+    let isRunning;
+    let lastTime;
+
+    const resetGame = () => {
+      dino = {
+        x: 80,
+        y: groundY,
+        width: 46,
+        height: 56,
+        velocityY: 0,
+        isJumping: false,
+      };
+      obstacles = [];
+      clouds = createClouds();
+      gameSpeed = 6;
+      score = 0;
+      isRunning = true;
+      lastTime = performance.now();
+      statusEl.textContent = "Lauf!";
+    };
+
+    const createClouds = () =>
+      Array.from({ length: 4 }, (_, index) => ({
+        x: 200 + index * 200,
+        y: 40 + Math.random() * 40,
+        speed: 0.3 + Math.random() * 0.4,
+      }));
+
+    const addObstacle = () => {
+      const height = 32 + Math.random() * 28;
+      obstacles.push({
+        x: canvas.width + 40,
+        y: groundY - height + 10,
+        width: 24 + Math.random() * 16,
+        height,
+        passed: false,
+      });
+    };
+
+    const maybeAddObstacle = () => {
+      if (obstacles.length === 0) {
+        addObstacle();
+        return;
+      }
+      const last = obstacles[obstacles.length - 1];
+      if (canvas.width - last.x > 180 + Math.random() * 120) {
+        addObstacle();
+      }
+    };
+
+    const updateDino = () => {
+      if (dino.isJumping) {
+        dino.velocityY += gravity;
+        dino.y += dino.velocityY;
+        if (dino.y >= groundY) {
+          dino.y = groundY;
+          dino.velocityY = 0;
+          dino.isJumping = false;
+        }
+      }
+    };
+
+    const updateObstacles = () => {
+      obstacles.forEach((obstacle) => {
+        obstacle.x -= gameSpeed;
+        if (!obstacle.passed && obstacle.x + obstacle.width < dino.x) {
+          obstacle.passed = true;
+          score += 10;
+          scoreEl.textContent = score;
+        }
+      });
+
+      obstacles = obstacles.filter((obstacle) => obstacle.x + obstacle.width > -40);
+    };
+
+    const updateClouds = () => {
+      clouds.forEach((cloud) => {
+        cloud.x -= cloud.speed;
+        if (cloud.x < -60) {
+          cloud.x = canvas.width + 80;
+          cloud.y = 30 + Math.random() * 50;
+        }
+      });
+    };
+
+    const detectCollision = () =>
+      obstacles.some(
+        (obstacle) =>
+          dino.x < obstacle.x + obstacle.width &&
+          dino.x + dino.width > obstacle.x &&
+          dino.y < obstacle.y + obstacle.height &&
+          dino.y + dino.height > obstacle.y
+      );
+
+    const drawGround = () => {
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(0, groundY + dino.height - 4, canvas.width, 4);
+      ctx.fillStyle = "#e2e8f0";
+      for (let i = 0; i < canvas.width; i += 24) {
+        ctx.fillRect(i, groundY + dino.height, 12, 2);
+      }
+    };
+
+    const drawDino = () => {
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(dino.x, dino.y - dino.height, dino.width, dino.height);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(dino.x + 28, dino.y - dino.height + 12, 10, 10);
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(dino.x + 33, dino.y - dino.height + 16, 4, 4);
+    };
+
+    const drawObstacles = () => {
+      ctx.fillStyle = "#0ea5e9";
+      obstacles.forEach((obstacle) => {
+        ctx.fillRect(obstacle.x, obstacle.y - obstacle.height, obstacle.width, obstacle.height);
+        ctx.fillStyle = "#0284c7";
+        ctx.fillRect(obstacle.x + obstacle.width * 0.3, obstacle.y - obstacle.height + 6, 4, 10);
+        ctx.fillStyle = "#0ea5e9";
+      });
+    };
+
+    const drawClouds = () => {
+      ctx.fillStyle = "rgba(100, 116, 139, 0.25)";
+      clouds.forEach((cloud) => {
+        ctx.beginPath();
+        ctx.ellipse(cloud.x, cloud.y, 24, 12, 0, 0, Math.PI * 2);
+        ctx.ellipse(cloud.x + 20, cloud.y + 6, 20, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    };
+
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawClouds();
+      drawGround();
+      drawDino();
+      drawObstacles();
+    };
+
+    const gameLoop = (time) => {
+      if (!isRunning) {
+        return;
+      }
+      const delta = time - lastTime;
+      lastTime = time;
+
+      updateDino();
+      updateObstacles();
+      updateClouds();
+      maybeAddObstacle();
+
+      if (detectCollision()) {
+        isRunning = false;
+        statusEl.textContent = "Game Over!";
+        bestScore = Math.max(bestScore, score);
+        bestEl.textContent = bestScore;
+        localStorage.setItem("dinoBestScore", bestScore);
+      } else {
+        score += delta * 0.01;
+        scoreEl.textContent = Math.floor(score);
+        if (Math.floor(score) % 120 === 0) {
+          gameSpeed = Math.min(12, gameSpeed + 0.2);
+        }
+        requestAnimationFrame(gameLoop);
+      }
+
+      render();
+    };
+
+    const jump = () => {
+      if (!isRunning) {
+        resetGame();
+        requestAnimationFrame(gameLoop);
+      }
+      if (!dino.isJumping) {
+        dino.isJumping = true;
+        dino.velocityY = jumpVelocity;
+      }
+    };
+
+    const handleKeydown = (event) => {
+      if (event.code === "Space") {
+        event.preventDefault();
+        jump();
+      }
+    };
+
+    const handlePointer = () => {
+      jump();
+    };
+
+    bestEl.textContent = bestScore;
+    resetGame();
+    render();
+
+    window.addEventListener("keydown", handleKeydown);
+    canvas.addEventListener("pointerdown", handlePointer);
+    restartButton.addEventListener("click", () => {
+      resetGame();
+      requestAnimationFrame(gameLoop);
+    });
+  </script>
 </body>
 </html>
